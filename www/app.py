@@ -1,39 +1,44 @@
 # coding: utf-8
 
-import logging; logging.basicConfig(level=logging.INFO)
+import logging;
+
+logging.basicConfig(level=logging.INFO)
 import asyncio, os, json, time
 from jinja2 import Environment, FileSystemLoader
-from www import orm
+import www.orm as orm
 from www.coroweb import add_routes, add_static
 from www.handlers import COOKIE_NAME, cookie2user
 from datetime import datetime
 from aiohttp import web
 
+
 def init_jinja2(app, **kw):
     logging.info('init jinja2...')
     options = dict(
-        autoescape = kw.get('autoescape',True),
-        block_start_string = kw.get('block_start_string','{%'),
-        block_end_string = kw.get('block_end_string', '%}'),
-        variable_start_string = kw.get('variable_start_string','{{'),
-        variable_end_string = kw.get('variable_end_string','}}'),
-        auto_reload = kw.get('auto_reload', True)
+        autoescape=kw.get('autoescape', True),
+        block_start_string=kw.get('block_start_string', '{%'),
+        block_end_string=kw.get('block_end_string', '%}'),
+        variable_start_string=kw.get('variable_start_string', '{{'),
+        variable_end_string=kw.get('variable_end_string', '}}'),
+        auto_reload=kw.get('auto_reload', True)
     )
-    path = kw.get('path',None)
+    path = kw.get('path', None)
     if path is None:
-        path = os.path.join(os.path.dirname(os.path.abspath(__file__)),'templates')
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'templates')
     logging.info('set jinja2 template path: %s' % path)
-    env = Environment( loader=FileSystemLoader(path), **options)
+    env = Environment(loader=FileSystemLoader(path), **options)
     filters = kw.get('filters', None)
     if filters is not None:
-        for name,f in filters.items():
-            env.filters[name]=f
-    app['__templating__']=env
+        for name, f in filters.items():
+            env.filters[name] = f
+    app['__templating__'] = env
+
 
 async def logger_factory(app, handler):
     async def logger(request):
         logging.info('Reqeust: %s %s' % (request.method, request.path))
         return (await handler(request))
+
     return logger
 
 
@@ -56,7 +61,8 @@ async def response_factory(app, handler):
         if isinstance(r, dict):
             template = r.get('__template__')
             if template is None:
-                resp = web.Response(body=json.dumps(r, ensure_ascii=False, default=lambda o: o.__dict__).encode('utf-8'))
+                resp = web.Response(
+                    body=json.dumps(r, ensure_ascii=False, default=lambda o: o.__dict__).encode('utf-8'))
                 resp.content_type = 'application/json;charset=utf-8'
                 return resp
             else:
@@ -73,7 +79,9 @@ async def response_factory(app, handler):
         resp = web.Response(body=str(r).encode('utf-8'))
         resp.content_type = 'text/plain;charset=utf-8'
         return resp
+
     return response
+
 
 async def auth_factory(app, handler):
     async def auth(request):
@@ -81,14 +89,16 @@ async def auth_factory(app, handler):
         request.__user__ = None
         cookie_str = request.cookies.get(COOKIE_NAME)
         if cookie_str:
-            user = await cookie2user( cookie_str )
+            user = await cookie2user(cookie_str)
             if user:
                 logging.info('set current user: %s' % user.email)
                 request.__user__ = user
             if request.path.startswith('/manage/') and (request.__user__ is None or not request.__user__.admin):
                 return web.HTTPFound('/signin')
         return (await handler(request))
+
     return auth
+
 
 async def data_factory(app, handler):
     async def parse_data(request):
@@ -100,7 +110,9 @@ async def data_factory(app, handler):
                 request.__data__ = await request.post()
                 logging.info('request form: %s' % str(request.__data__))
         return (await handler(request))
+
     return parse_data
+
 
 def datetime_filter(t):
     delta = int(time.time() - t)
@@ -115,10 +127,12 @@ def datetime_filter(t):
     dt = datetime.fromtimestamp(t)
     return u'%s年%s月%s日' % (dt.year, dt.month, dt.day)
 
+
 async def init(loop):
     logging.info('init...')
     from www.config import configs
-    await orm.create_pool(loop= loop, host=configs.db.host, port=configs.db.port, user=configs.db.user, password=configs.db.password, db=configs.db.db_name)
+    await orm.create_pool(loop=loop, host=configs.db.host, port=configs.db.port, user=configs.db.user,
+                          password=configs.db.password, db=configs.db.db_name)
     app = web.Application(loop=loop, middlewares=[
         logger_factory, auth_factory, response_factory
     ])
